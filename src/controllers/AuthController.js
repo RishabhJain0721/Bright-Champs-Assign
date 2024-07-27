@@ -3,6 +3,7 @@ import { isEmailValid } from "../utils/checkEmail.js";
 import { hashPassword } from "../utils/hashPassword.js";
 import { sendVerificationMail } from "../services/mailer.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 export const signup = async (req, res) => {
   console.log("Req body : ", req.body);
@@ -90,7 +91,47 @@ export const verifyEmail = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  // Code for logging in a user
+  console.log("Req body : ", req.body);
+  const { username, password } = req.body;
+
+  const existingUser = await User.findOne({ username }).lean();
+
+  if (!existingUser) {
+    // No such user found
+    console.log("User does not exist");
+    return res.status(400).send({
+      status: 400,
+      message: "User does not exist. Please signup.",
+    });
+  }
+
+  if (!existingUser.isVerified) {
+    // Unverified user
+    console.log("User is not verified");
+    return res.status(400).send({
+      status: 400,
+      message: "User is not verified. Please verify.",
+    });
+  }
+
+  const checkPassword = bcrypt.compareSync(password, existingUser.password);
+
+  if (!checkPassword) {
+    // Incorrect password
+    console.log("Password is incorrect");
+    return res.status(400).send({
+      status: 400,
+      message: "Password is incorrect. Please try again.",
+    });
+  }
+
+  // Login successful
+  console.log("Login successful");
+
+  res.status(200).send({
+    status: 200,
+    message: "Login successful.",
+  });
 };
 
 export const resetPassword = async (req, res) => {
