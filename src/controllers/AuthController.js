@@ -4,9 +4,11 @@ import { hashPassword } from "../utils/hashPassword.js";
 import { sendVerificationMail } from "../services/mailer.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import path from "path";
 
 export const signup = async (req, res) => {
-  console.log("Req body : ", req.body);
   const { username, email, password } = req.body;
 
   // Check if the email is valid
@@ -29,13 +31,11 @@ export const signup = async (req, res) => {
 
   // Hash the password
   const hashedPassword = hashPassword(password);
-  console.log("Hashed Password : ", hashedPassword);
 
   // Generate a verification token
   const verificationToken = jwt.sign({ email }, process.env.SECRET_KEY, {
     expiresIn: "1d", // Token expires in 1 day
   });
-  console.log("Verification Link : ", verificationToken);
 
   try {
     // Create a new user with the verification token
@@ -49,7 +49,24 @@ export const signup = async (req, res) => {
 
     await newUser.save();
 
-    const status = sendVerificationMail(verificationToken, email);
+    const baseUrl = process.env.BASE_URL;
+    const verificationLink = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+
+    const mailOptions = {
+      from: process.env.ADMIN_EMAIL,
+      to: email,
+      subject: "Verify your email",
+      html: `
+          <div style="font-family: Arial, sans-serif;">
+            <p style="color: #666;">This is an assignment by Bright Champs, please verify your email address by clicking the link below:</p>
+            <p><a href="${verificationLink}" target="_blank" style="display: inline-block; background-color: #007bff; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 5px;">Verify Email Address</a></p>
+            <p style="color: #666;">If you did not sign up for an account, you can safely ignore this email.</p>
+            <p style="color: #666;">Thank you!</p>
+          </div>
+        `,
+    };
+
+    const status = sendVerificationMail(email, mailOptions);
     if (!status) {
       throw new Error("Email verification failed");
     }
@@ -135,5 +152,86 @@ export const login = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  // Code for resetting a user's password
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email });
+
+    const baseUrl = process.env.BASE_URL;
+    const resetButtonLink = `${baseUrl}/api/auth/reset-page?token=${user.verificationToken}`;
+
+    console.log("Reset Button Link : ", resetButtonLink);
+
+    const mailOptions = {
+      from: process.env.ADMIN_EMAIL,
+      to: email,
+      subject: "Reset your password",
+      html: `
+          <div style="font-family: Arial, sans-serif;">
+            <p style="color: #666;">Please reset your password by clicking the link below:</p>
+            <p><a href="${resetButtonLink}" target="_blank" style="display: inline-block; background-color: #D32F2F; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 5px;">Reset Password</a></p>
+            <p style="color: #666;">Thank you!</p>
+          </div>
+        `,
+    };
+
+    await sendVerificationMail(email, mailOptions);
+
+    res.status(200).send({
+      status: 200,
+      message: "Password reset link sent to your email.",
+    });
+  } catch (error) {
+    res.status(400).send({
+      status: 400,
+      message: "Password reset failed. Please try again later.",
+    });
+  }
+};
+
+export const resetPage = async (req, res) => {
+  const { token } = req.query;
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+
+  try {
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    const user = await User.findOne({ email: decoded.email });
+    if (user) {
+      res.sendFile(path.join(__dirname, "..", "public", "resetPass.html"));
+    } else {
+      res.status(400).send({
+        status: 400,
+        message: "Invalid token. Password reset failed.",
+      });
+    }
+  } catch (error) {
+    res.status(500).send({
+      status: 500,
+      message: "Password reset failed.",
+    });
+  }
+};
+
+export const reset = async (req, res) => {
+  const { token, password } = req.body;
+
+  try {
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    const user = await User.findOne({ email: decoded.email });
+
+    if (user) {
+      user.password = hashPassword(password);
+      await user.save();
+      res.status(200).send({
+        status: 200,
+        message: "Password reset successful.",
+      });
+    }
+  } catch (error) {
+    res.status(500).send({
+      status: 500,
+      message: "Password reset failed.",
+    });
+  }
 };
