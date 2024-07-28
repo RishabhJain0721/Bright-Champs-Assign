@@ -37,6 +37,11 @@
 
           const formData = new FormData(form);
 
+          if (formData.get("password") !== formData.get("confirmPassword")) {
+            alert("Passwords are not matching");
+            return;
+          }
+
           const dataObject = {
             token: token,
             password: formData.get("password"),
@@ -55,8 +60,10 @@
 
             if (response.ok) {
               const result = await response.json();
+              alert("Password reset successfully");
               console.log("Password reset successful:", result);
             } else {
+              alert("Error resetting password");
               console.error("Error resetting password:", response.statusText);
             }
           } catch (error) {
