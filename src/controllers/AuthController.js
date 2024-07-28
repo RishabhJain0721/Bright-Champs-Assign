@@ -38,17 +38,6 @@ export const signup = async (req, res) => {
   });
 
   try {
-    // Create a new user with the verification token
-    const newUser = new User({
-      username,
-      email,
-      password: hashedPassword,
-      isVerified: false,
-      verificationToken,
-    });
-
-    await newUser.save();
-
     const baseUrl = process.env.BASE_URL;
     const verificationLink = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
 
@@ -66,10 +55,20 @@ export const signup = async (req, res) => {
         `,
     };
 
-    const status = sendVerificationMail(email, mailOptions);
+    const status = await sendVerificationMail(email, mailOptions);
     if (!status) {
       throw new Error("Email verification failed");
     }
+    // Create a new user with the verification token
+    const newUser = new User({
+      username,
+      email,
+      password: hashedPassword,
+      isVerified: false,
+      verificationToken,
+    });
+
+    await newUser.save();
     res.status(200).send({
       status: 200,
       message: "Signup successful. Please check your email for verification.",
